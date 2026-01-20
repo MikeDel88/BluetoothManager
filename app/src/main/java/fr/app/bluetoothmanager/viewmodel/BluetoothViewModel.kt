@@ -67,14 +67,7 @@ class BluetoothViewModel : ViewModel() {
             @SuppressLint("MissingPermission")
             majDevices(bluetoothDevice, DeviceType.CLASSIC)
         },
-        onUpdatedConnected = { bluetoothDevice, connected ->
-            val existing = _boundedDevices.value.find { it.address == bluetoothDevice.address }
-            existing?.let {
-                _boundedDevices.update { list ->
-                    list.map { if(it.address == existing.address) it.copy(connected = connected) else it }
-                }
-            }
-        }
+        onUpdatedConnected = ::onConnectedChange
     )
 
     /* ---------- BLE ---------- */
@@ -238,6 +231,21 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Met à jour la liste des appareils connectés en fonction de l'état de la connexion.
+     */
+    private fun onConnectedChange(bluetoothDevice: BluetoothDevice, isConnected: Boolean) {
+        val existing = _boundedDevices.value.find { it.address == bluetoothDevice.address }
+        existing?.let {
+            _boundedDevices.update { list ->
+                list.map { if(it.address == existing.address) it.copy(connected = isConnected) else it }
+            }
+        }
+    }
+
+    /**
+     * Met à jour la liste des appareils connectés en fonction des profils.
+     */
     private fun updateConnected(
         context: Context, adapter:
         BluetoothAdapter,
@@ -261,7 +269,6 @@ class BluetoothViewModel : ViewModel() {
                 it
             )
         }
-
     }
 
     override fun onCleared() {
