@@ -8,6 +8,7 @@ import android.util.Log
 
 class BluetoothScanReceiver(
     private val onDeviceFound: (BluetoothDevice) -> Unit,
+    private val onUpdatedConnected: (BluetoothDevice, Boolean) -> Unit,
 ): BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -22,6 +23,24 @@ class BluetoothScanReceiver(
 
                 device?.let {
                     onDeviceFound(it)
+                }
+            }
+            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                val device: BluetoothDevice? =
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+
+                Log.d("BT_CLASSIC", "Device Connected : ${device?.name} - ${device?.address}")
+                device?.let {
+                    onUpdatedConnected(it, true)
+                }
+            }
+            BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                val device: BluetoothDevice? =
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+
+                Log.d("BT_CLASSIC", "Device Disconnected : ${device?.name} - ${device?.address}")
+                device?.let {
+                    onUpdatedConnected(it, false)
                 }
             }
         }
