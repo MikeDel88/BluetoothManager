@@ -62,10 +62,20 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
-    private val bluetoothScanReceiver = BluetoothScanReceiver { bluetoothDevice ->
-        @SuppressLint("MissingPermission")
-        majDevices(bluetoothDevice, DeviceType.CLASSIC)
-    }
+    private val bluetoothScanReceiver = BluetoothScanReceiver(
+        onDeviceFound =  { bluetoothDevice ->
+            @SuppressLint("MissingPermission")
+            majDevices(bluetoothDevice, DeviceType.CLASSIC)
+        },
+        onUpdatedConnected = { bluetoothDevice, connected ->
+            val existing = _boundedDevices.value.find { it.address == bluetoothDevice.address }
+            existing?.let {
+                _boundedDevices.update { list ->
+                    list.map { if(it.address == existing.address) it.copy(connected = connected) else it }
+                }
+            }
+        }
+    )
 
     /* ---------- BLE ---------- */
 
@@ -93,12 +103,19 @@ class BluetoothViewModel : ViewModel() {
 
     fun startListening(context: Context) {
         val appContext = context.applicationContext
-        appContext.registerReceiver(stateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
-        val filter = IntentFilter().apply {
+
+        val bleFilter = IntentFilter().apply {
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+        }
+        appContext.registerReceiver(stateReceiver, bleFilter)
+
+        val classicfilter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_FOUND)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
         }
-        appContext.registerReceiver(bluetoothScanReceiver, filter)
+        appContext.registerReceiver(bluetoothScanReceiver, classicfilter)
         updateInitialState()
     }
 
@@ -127,6 +144,7 @@ class BluetoothViewModel : ViewModel() {
         bleScanner?.startScan(bleCallback)
         startDiscovery(adapter)
 
+        loadBondedDevices(adapter)
         getConnectedDevice(context, adapter)
 
         viewModelScope.launch {
@@ -164,7 +182,12 @@ class BluetoothViewModel : ViewModel() {
             bluetoothAdapter.cancelDiscovery()
         }
 
-        bluetoothAdapter.bondedDevices.forEach { bluetoothDevice ->
+        bluetoothAdapter.startDiscovery()
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun loadBondedDevices(adapter: BluetoothAdapter) {
+        adapter.bondedDevices.forEach { bluetoothDevice ->
             val newDevice = bluetoothDevice.toDevice(DeviceType.CLASSIC)
             _boundedDevices.update { list ->
                 if (list.none { it.address == newDevice.address }) {
@@ -173,8 +196,6 @@ class BluetoothViewModel : ViewModel() {
 
             }
         }
-
-        bluetoothAdapter.startDiscovery()
     }
 
     @SuppressLint("MissingPermission")
@@ -184,7 +205,7 @@ class BluetoothViewModel : ViewModel() {
     }
 
     private fun getConnectedDevice(context: Context, adapter: BluetoothAdapter) {
-        updateConnected(context, adapter, listOf(BluetoothProfile.STATE_CONNECTED)) { connected ->
+        updateConnected(context.applicationContext, adapter, listOf(BluetoothProfile.STATE_CONNECTED)) { connected ->
             _boundedDevices.update { list ->
                 list.map { device ->
                     device.copy(
