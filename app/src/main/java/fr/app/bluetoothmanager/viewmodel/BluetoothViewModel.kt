@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
@@ -111,7 +112,9 @@ class BluetoothViewModel : ViewModel() {
     fun startScan(context: Context) {
         if (_scanState.value == ScanState.Scanning) return
 
-        val adapter = BluetoothAdapter.getDefaultAdapter()
+        val bluetoothManager: BluetoothManager = context.getSystemService(BluetoothManager::class.java)
+        val adapter: BluetoothAdapter? = bluetoothManager.adapter
+
         if (adapter == null || !adapter.isEnabled) {
             _scanState.value = ScanState.Error("Bluetooth OFF")
             return
@@ -122,41 +125,14 @@ class BluetoothViewModel : ViewModel() {
         _scanState.value = ScanState.Scanning
 
         bleScanner?.startScan(bleCallback)
-        startDiscovery(context)
+        startDiscovery(adapter)
+
+        getConnectedDevice(context, adapter)
 
         viewModelScope.launch {
             delay(40_000)
             stopScanInternal()
         }
-
-    }
-
-    @SuppressLint("MissingPermission")
-    fun startDiscovery(context: Context) {
-        val bluetoothManager: BluetoothManager = context.getSystemService(BluetoothManager::class.java)
-        val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter ?: return
-
-        if(bluetoothAdapter.isDiscovering) {
-            bluetoothAdapter.cancelDiscovery()
-        }
-
-        bluetoothAdapter.bondedDevices.forEach { bluetoothDevice ->
-            val newDevice = bluetoothDevice.toDevice()
-            _boundedDevices.update { list ->
-                if (list.none { it.address == newDevice.address }) {
-                    list + newDevice
-                } else list
-
-            }
-        }
-
-        bluetoothAdapter.startDiscovery()
-    }
-
-    @SuppressLint("MissingPermission")
-    fun stopDiscovery() {
-        val adapter = BluetoothAdapter.getDefaultAdapter()
-        adapter?.cancelDiscovery()
     }
 
     fun stopScan() {
@@ -182,6 +158,43 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
+    @SuppressLint("MissingPermission")
+    private fun startDiscovery(bluetoothAdapter: BluetoothAdapter) {
+        if(bluetoothAdapter.isDiscovering) {
+            bluetoothAdapter.cancelDiscovery()
+        }
+
+        bluetoothAdapter.bondedDevices.forEach { bluetoothDevice ->
+            val newDevice = bluetoothDevice.toDevice(DeviceType.CLASSIC)
+            _boundedDevices.update { list ->
+                if (list.none { it.address == newDevice.address }) {
+                    list + newDevice
+                } else list
+
+            }
+        }
+
+        bluetoothAdapter.startDiscovery()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopDiscovery() {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        adapter?.cancelDiscovery()
+    }
+
+    private fun getConnectedDevice(context: Context, adapter: BluetoothAdapter) {
+        updateConnected(context, adapter, listOf(BluetoothProfile.STATE_CONNECTED)) { connected ->
+            _boundedDevices.update { list ->
+                list.map { device ->
+                    device.copy(
+                        connected = connected.any { it.address == device.address }
+                    )
+                }
+            }
+        }
+    }
+
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun BluetoothDevice.toDevice(type: DeviceType) = Device(
         name = name,
@@ -202,6 +215,32 @@ class BluetoothViewModel : ViewModel() {
                 list.map { if(it.address == newDevice.address) newDevice else it }
             }
         }
+    }
+
+    private fun updateConnected(
+        context: Context, adapter:
+        BluetoothAdapter,
+        profile: List<Int>,
+        onConnected: (List<BluetoothDevice>) -> Unit
+    ) {
+        profile.forEach {
+            adapter.getProfileProxy(
+                context,
+                object : BluetoothProfile.ServiceListener {
+
+                    override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                        val connected = proxy.connectedDevices
+                        onConnected(connected)
+
+                        adapter.closeProfileProxy(profile, proxy)
+                    }
+
+                    override fun onServiceDisconnected(profile: Int) {}
+                },
+                it
+            )
+        }
+
     }
 
     override fun onCleared() {
