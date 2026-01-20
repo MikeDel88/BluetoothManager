@@ -16,6 +16,7 @@ import fr.app.bluetoothmanager.broadcast.BluetoothScanReceiver
 import fr.app.bluetoothmanager.broadcast.BluetoothState
 import fr.app.bluetoothmanager.broadcast.BluetoothStateReceiver
 import fr.app.bluetoothmanager.model.Device
+import fr.app.bluetoothmanager.model.DeviceType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,21 +59,9 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
-    private val bluetoothScanReceiver = BluetoothScanReceiver { device ->
+    private val bluetoothScanReceiver = BluetoothScanReceiver { bluetoothDevice ->
         @SuppressLint("MissingPermission")
-        val newDevice = Device(
-            name = device.name,
-            address = device.address,
-        )
-
-        _devices.update { list ->
-            if (list.none { it.address == newDevice.address }) {
-                list + newDevice
-            } else {
-                // Mettre à jour le nom si possible
-                list.map { if (it.address == newDevice.address) newDevice else it }
-            }
-        }
+        majDevices(bluetoothDevice)
     }
 
     /* ---------- BLE ---------- */
@@ -86,21 +75,9 @@ class BluetoothViewModel : ViewModel() {
             callbackType: Int,
             result: ScanResult
         ) {
-            val device = result.device ?: return
+            val bluetoothDevice = result.device ?: return
+            majDevices(bluetoothDevice)
 
-            val newDevice = Device(
-                name = device.name,
-                address = device.address,
-            )
-
-            _devices.update { list ->
-                if (list.none { it.address == newDevice.address }) {
-                    list + newDevice
-                } else {
-                    // Mettre à jour le nom si possible
-                    list.map { if(it.address == newDevice.address) newDevice else it }
-                }
-            }
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -161,11 +138,8 @@ class BluetoothViewModel : ViewModel() {
             bluetoothAdapter.cancelDiscovery()
         }
 
-        bluetoothAdapter.bondedDevices.forEach { device ->
-            val newDevice = Device(
-                name = device.name,
-                address = device.address,
-            )
+        bluetoothAdapter.bondedDevices.forEach { bluetoothDevice ->
+            val newDevice = bluetoothDevice.toDevice()
             _boundedDevices.update { list ->
                 if (list.none { it.address == newDevice.address }) {
                     list + newDevice
@@ -203,6 +177,26 @@ class BluetoothViewModel : ViewModel() {
             adapter == null -> BluetoothState.UNKNOWN
             adapter.isEnabled -> BluetoothState.ON
             else -> BluetoothState.OFF
+        }
+    }
+
+    private fun BluetoothDevice.toDevice() = Device(
+        name = name,
+        address = address,
+        bonded = bondState == BluetoothDevice.BOND_BONDED,
+        connected = false,
+        type = DeviceType.CLASSIC
+    )
+
+    private fun majDevices(bluetoothDevice: BluetoothDevice) {
+        val newDevice = bluetoothDevice.toDevice()
+        _devices.update { list ->
+            if (list.none { it.address == newDevice.address }) {
+                list + newDevice
+            } else {
+                // Mettre à jour le nom si possible
+                list.map { if(it.address == newDevice.address) newDevice else it }
+            }
         }
     }
 
