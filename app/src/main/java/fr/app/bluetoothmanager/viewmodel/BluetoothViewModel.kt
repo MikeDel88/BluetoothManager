@@ -1,5 +1,6 @@
 package fr.app.bluetoothmanager.viewmodel
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -9,6 +10,7 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.IntentFilter
+import androidx.annotation.RequiresPermission
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import fr.app.bluetoothmanager.state.ScanState
@@ -61,7 +63,7 @@ class BluetoothViewModel : ViewModel() {
 
     private val bluetoothScanReceiver = BluetoothScanReceiver { bluetoothDevice ->
         @SuppressLint("MissingPermission")
-        majDevices(bluetoothDevice)
+        majDevices(bluetoothDevice, DeviceType.CLASSIC)
     }
 
     /* ---------- BLE ---------- */
@@ -76,7 +78,7 @@ class BluetoothViewModel : ViewModel() {
             result: ScanResult
         ) {
             val bluetoothDevice = result.device ?: return
-            majDevices(bluetoothDevice)
+            majDevices(bluetoothDevice, DeviceType.BLE)
 
         }
 
@@ -180,16 +182,18 @@ class BluetoothViewModel : ViewModel() {
         }
     }
 
-    private fun BluetoothDevice.toDevice() = Device(
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun BluetoothDevice.toDevice(type: DeviceType) = Device(
         name = name,
         address = address,
         bonded = bondState == BluetoothDevice.BOND_BONDED,
         connected = false,
-        type = DeviceType.CLASSIC
+        type = type
     )
 
-    private fun majDevices(bluetoothDevice: BluetoothDevice) {
-        val newDevice = bluetoothDevice.toDevice()
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun majDevices(bluetoothDevice: BluetoothDevice, type: DeviceType) {
+        val newDevice = bluetoothDevice.toDevice(type)
         _devices.update { list ->
             if (list.none { it.address == newDevice.address }) {
                 list + newDevice
