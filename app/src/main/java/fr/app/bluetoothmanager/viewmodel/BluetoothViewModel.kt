@@ -14,12 +14,12 @@ import android.content.IntentFilter
 import androidx.annotation.RequiresPermission
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import fr.app.bluetoothmanager.state.ScanState
 import fr.app.bluetoothmanager.broadcast.BluetoothScanReceiver
 import fr.app.bluetoothmanager.broadcast.BluetoothState
 import fr.app.bluetoothmanager.broadcast.BluetoothStateReceiver
 import fr.app.bluetoothmanager.model.Device
 import fr.app.bluetoothmanager.model.DeviceType
+import fr.app.bluetoothmanager.state.ScanState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +30,12 @@ import kotlinx.coroutines.launch
 class BluetoothViewModel : ViewModel() {
 
     /* ---------- Bluetooth state ---------- */
+
+    private var bluetoothDevices: MutableList<BluetoothDevice> = mutableListOf()
+
+//    companion object {
+//        private val MY_UUID = UUID.fromString("00001101-0000-1000-8000-008")
+//    }
 
     private val _bluetoothState =
         MutableStateFlow(BluetoothState.UNKNOWN)
@@ -131,6 +137,7 @@ class BluetoothViewModel : ViewModel() {
         }
 
         bleScanner = adapter.bluetoothLeScanner
+        bluetoothDevices = mutableListOf()
         _devices.value = emptyList()
         _scanState.value = ScanState.Scanning
 
@@ -143,6 +150,21 @@ class BluetoothViewModel : ViewModel() {
         viewModelScope.launch {
             delay(40_000)
             stopScanInternal()
+        }
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun pairDevice(device: Device) {
+        val bluetoothDevice = bluetoothDevices.find { it.address == device.address }
+        bluetoothDevice?.let {
+            when(device.type) {
+                DeviceType.CLASSIC -> {
+                    bluetoothDevice.createBond()
+                }
+                DeviceType.BLE -> {
+
+                }
+            }
         }
     }
 
@@ -229,6 +251,7 @@ class BluetoothViewModel : ViewModel() {
                 list.map { if(it.address == newDevice.address) newDevice else it }
             }
         }
+        bluetoothDevices.add(bluetoothDevice)
     }
 
     /**

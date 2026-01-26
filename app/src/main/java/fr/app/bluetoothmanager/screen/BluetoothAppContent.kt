@@ -114,7 +114,7 @@ fun BluetoothAppContent(
         HorizontalDivider()
         LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(devices.size) {
-                DeviceCard(modifier = Modifier.fillMaxWidth(), device = devices[it])
+                DeviceCard(modifier = Modifier.fillMaxWidth(), device = devices[it], onClick = viewModel::pairDevice)
             }
         }
     }

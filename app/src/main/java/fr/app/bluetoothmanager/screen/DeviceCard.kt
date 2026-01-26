@@ -40,8 +40,11 @@ private fun DeviceCardPreview() {
 }
 
 @Composable
-fun DeviceCard(modifier: Modifier = Modifier, device: Device) {
-    Card(modifier = modifier.height(IntrinsicSize.Max).padding(8.dp)) {
+fun DeviceCard(modifier: Modifier = Modifier, device: Device, onClick : (Device) -> Unit = {}) {
+    Card(
+        modifier = modifier.height(IntrinsicSize.Max).padding(8.dp),
+        onClick = { onClick(device) }
+    ) {
         val smallSize = MaterialTheme.typography.bodySmall.fontSize
         val mediumSize = MaterialTheme.typography.bodyMedium.fontSize
 
